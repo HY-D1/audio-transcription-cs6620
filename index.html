@@ -1,985 +1,512 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Transcription Service - CS6620 Group 9</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Audio Transcription Service - CS6620 Group 9</title>
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+  <style>
+    /* ===== your original CSS stays ===== */
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height:100vh; padding:20px;
+    }
+    .container { max-width:900px; margin:0 auto; }
+    .header { text-align:center; color:white; margin-bottom:30px; }
+    .main-card {
+      background:white; border-radius:20px; box-shadow:0 20px 40px rgba(0,0,0,0.1);
+      overflow:hidden;
+    }
+    .tabs { display:flex; background:#f8f9fa; border-bottom:2px solid #e9ecef; }
+    .tab {
+      flex:1; padding:20px; text-align:center; cursor:pointer; background:none; border:none;
+      font-size:1.1em; font-weight:600; color:#6c757d; transition:all .3s ease; position:relative;
+    }
+    .tab.active { background:white; color:#667eea; }
+    .tab-content { padding:40px; min-height:400px; }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
+    .upload-area {
+      border:3px dashed #dee2e6; border-radius:15px; padding:60px 30px; text-align:center;
+      cursor:pointer; background:#fafbfc;
+    }
+    .file-input { display:none; }
+    .file-info {
+      margin:20px 0; padding:15px; background:#f8f9fa; border-radius:10px; display:none;
+    }
+    .file-info.show { display:block; }
 
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
-            animation: fadeInDown 0.8s ease;
-        }
+    .btn {
+      padding:12px 30px; border:none; border-radius:8px; font-size:1.1em;
+      font-weight:600; cursor:pointer; transition:all .3s ease; margin:10px 5px;
+    }
+    .btn-primary { background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; }
+    .btn-secondary { background:#e9ecef; color:#495057; }
+    .btn-small { padding:8px 16px; font-size:.9em; }
+    .download-btn { background:#28a745; color:white; }
 
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
+    .status-message {
+      margin:20px 0; padding:15px 20px; border-radius:10px; display:none;
+    }
+    .status-message.show { display:block; }
+    .status-message.info { background:#d1ecf1; color:#0c5460; border-left:4px solid #17a2b8; }
+    .status-message.success { background:#d4edda; color:#155724; border-left:4px solid #28a745; }
+    .status-message.error { background:#f8d7da; color:#721c24; border-left:4px solid #dc3545; }
 
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.95;
-        }
+    .jobs-container { max-height:500px; overflow-y:auto; }
+    .job-card {
+      background:#f8f9fa; border-radius:10px; padding:20px; margin-bottom:15px;
+      border:2px solid transparent;
+    }
+    .job-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .job-id { font-family:'Courier New', monospace; color:#6c757d; font-size:.9em; }
+    .job-status {
+      padding:5px 12px; border-radius:20px; font-size:.85em; font-weight:600; text-transform:uppercase;
+    }
+    .status-completed { background:#d4edda; color:#155724; }
+    .status-transcribing { background:#fff3cd; color:#856404; }
+    .status-waiting_upload { background:#d1ecf1; color:#0c5460; }
+    .status-failed { background:#f8d7da; color:#721c24; }
 
-        .main-card {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-            animation: fadeInUp 0.8s ease;
-        }
+    .preview-panel {
+      background:#fff; border-radius:10px; padding:12px; border:1px solid #e9ecef; margin-top:12px;
+    }
+    .segment-line {
+      padding:6px 0; border-bottom:1px dashed #eee; cursor:pointer;
+    }
+    .segment-line.active {
+      background:#f8f6ff; border-left:4px solid #667eea; padding-left:8px; font-weight:600;
+    }
+    .live-box {
+      background:#0f172a; color:#f8fafc; padding:12px; border-radius:8px; margin-top:10px;
+      font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space:pre-wrap; min-height:80px;
+    }
 
-        .tabs {
-            display: flex;
-            background: #f8f9fa;
-            border-bottom: 2px solid #e9ecef;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 20px;
-            text-align: center;
-            cursor: pointer;
-            background: none;
-            border: none;
-            font-size: 1.1em;
-            font-weight: 600;
-            color: #6c757d;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-
-        .tab:hover {
-            background: #fff;
-            color: #667eea;
-        }
-
-        .tab.active {
-            background: white;
-            color: #667eea;
-        }
-
-        .tab.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: #667eea;
-        }
-
-        .tab-content {
-            padding: 40px;
-            min-height: 400px;
-        }
-
-        .tab-panel {
-            display: none;
-            animation: fadeIn 0.5s ease;
-        }
-
-        .tab-panel.active {
-            display: block;
-        }
-
-        /* Upload Section */
-        .upload-area {
-            border: 3px dashed #dee2e6;
-            border-radius: 15px;
-            padding: 60px 30px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            background: #fafbfc;
-        }
-
-        .upload-area:hover {
-            border-color: #667eea;
-            background: #f8f6ff;
-        }
-
-        .upload-area.dragover {
-            border-color: #667eea;
-            background: #f0edff;
-            transform: scale(1.02);
-        }
-
-        .upload-icon {
-            font-size: 4em;
-            color: #667eea;
-            margin-bottom: 20px;
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        .file-info {
-            margin: 20px 0;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            display: none;
-        }
-
-        .file-info.show {
-            display: block;
-        }
-
-        .btn {
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin: 10px 5px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .btn-secondary {
-            background: #e9ecef;
-            color: #495057;
-        }
-
-        .btn-secondary:hover {
-            background: #dee2e6;
-        }
-
-        /* Status Messages */
-        .status-message {
-            margin: 20px 0;
-            padding: 15px 20px;
-            border-radius: 10px;
-            display: none;
-            animation: slideInDown 0.5s ease;
-        }
-
-        .status-message.show {
-            display: block;
-        }
-
-        .status-message.success {
-            background: #d4edda;
-            color: #155724;
-            border-left: 4px solid #28a745;
-        }
-
-        .status-message.error {
-            background: #f8d7da;
-            color: #721c24;
-            border-left: 4px solid #dc3545;
-        }
-
-        .status-message.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border-left: 4px solid #17a2b8;
-        }
-
-        .status-message.warning {
-            background: #fff3cd;
-            color: #856404;
-            border-left: 4px solid #ffc107;
-        }
-
-        /* Progress Bar */
-        .progress-container {
-            margin: 20px 0;
-            display: none;
-        }
-
-        .progress-container.show {
-            display: block;
-        }
-
-        .progress-bar {
-            height: 8px;
-            background: #e9ecef;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            width: 0%;
-            transition: width 0.3s ease;
-            border-radius: 10px;
-            animation: shimmer 2s infinite;
-        }
-
-        @keyframes shimmer {
-            0% { opacity: 0.8; }
-            50% { opacity: 1; }
-            100% { opacity: 0.8; }
-        }
-
-        /* Jobs Table */
-        .jobs-container {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .job-card {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
-
-        .job-card:hover {
-            border-color: #667eea;
-            transform: translateX(5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-
-        .job-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .job-id {
-            font-family: 'Courier New', monospace;
-            color: #6c757d;
-            font-size: 0.9em;
-        }
-
-        .job-status {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .status-completed {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-transcribing {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .status-waiting_upload {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .status-failed {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .job-actions {
-            margin-top: 15px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .btn-small {
-            padding: 8px 16px;
-            font-size: 0.9em;
-        }
-
-        /* Download buttons */
-        .download-btn {
-            background: #28a745;
-            color: white;
-        }
-
-        .download-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-        }
-
-        /* Loading Spinner */
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Animations */
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes slideInDown {
-            from {
-                transform: translateY(-10px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 2em;
-            }
-            
-            .tabs {
-                flex-direction: column;
-            }
-            
-            .tab-content {
-                padding: 20px;
-            }
-            
-            .upload-area {
-                padding: 40px 20px;
-            }
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-        }
-
-        .empty-state-icon {
-            font-size: 4em;
-            color: #dee2e6;
-            margin-bottom: 20px;
-        }
-    </style>
+    .empty-state { text-align:center; padding:60px 20px; color:#6c757d; }
+    .empty-state-icon { font-size:4em; color:#dee2e6; margin-bottom:20px; }
+  </style>
 </head>
+
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🎙️ Audio Transcription Service</h1>
-            <p>CS6620 Group 9 - Cloud Computing Project</p>
-        </div>
+<div class="container">
+  <div class="header">
+    <h1>🎙️ Audio Transcription Service</h1>
+    <p>CS6620 Group 9 - Cloud Computing Project</p>
+  </div>
 
-        <div class="main-card">
-            <div class="tabs">
-                <button class="tab active" onclick="switchTab('upload')">
-                    📤 Upload Audio
-                </button>
-                <button class="tab" onclick="switchTab('jobs')">
-                    📋 My Transcriptions
-                </button>
-                <button class="tab" onclick="switchTab('about')">
-                    ℹ️ About
-                </button>
-            </div>
-
-            <div class="tab-content">
-                <!-- Upload Tab -->
-                <div id="upload-tab" class="tab-panel active">
-                    <div class="upload-area" id="uploadArea" onclick="document.getElementById('audioFile').click()">
-                        <div class="upload-icon">☁️</div>
-                        <h2>Drop your audio file here</h2>
-                        <p>or click to browse</p>
-                        <p style="margin-top: 10px; color: #6c757d; font-size: 0.9em;">
-                            Supported: MP3, WAV, M4A (Max 25MB)
-                        </p>
-                    </div>
-                    
-                    <input type="file" id="audioFile" class="file-input" accept=".mp3,.wav,.m4a,audio/*">
-                    
-                    <div id="fileInfo" class="file-info">
-                        <strong>Selected File:</strong> <span id="fileName"></span><br>
-                        <strong>Size:</strong> <span id="fileSize"></span>
-                    </div>
-                    
-                    <div id="uploadStatus" class="status-message"></div>
-                    
-                    <div id="progressContainer" class="progress-container">
-                        <div class="progress-bar">
-                            <div id="progressFill" class="progress-fill"></div>
-                        </div>
-                    </div>
-                    
-                    <div style="text-align: center; margin-top: 20px;">
-                        <button id="uploadBtn" class="btn btn-primary" onclick="uploadAudio()" style="display: none;">
-                            🚀 Start Transcription
-                        </button>
-                        <button id="cancelBtn" class="btn btn-secondary" onclick="cancelUpload()" style="display: none;">
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Jobs Tab -->
-                <div id="jobs-tab" class="tab-panel">
-                    <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-                        <h2>Your Transcription Jobs</h2>
-                        <button class="btn btn-secondary btn-small" onclick="refreshJobs()">
-                            🔄 Refresh
-                        </button>
-                    </div>
-                    
-                    <div id="jobsList" class="jobs-container">
-                        <div class="empty-state">
-                            <div class="empty-state-icon">📭</div>
-                            <h3>No transcriptions yet</h3>
-                            <p>Upload an audio file to get started!</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- About Tab -->
-                <div id="about-tab" class="tab-panel">
-                    <h2>About This Project</h2>
-                    <br>
-                    <p><strong>Project:</strong> Cloud-Based Audio-to-Text Transcription Service</p>
-                    <p><strong>Course:</strong> CS6620 - Cloud Computing</p>
-                    <p><strong>Group:</strong> Group 9</p>
-                    <br>
-                    <h3>Features:</h3>
-                    <ul style="margin: 20px 0; padding-left: 20px;">
-                        <li>Upload audio files (MP3, WAV, M4A)</li>
-                        <li>Automatic speech-to-text transcription using AWS Transcribe</li>
-                        <li>Generate subtitle files (SRT, VTT, LRC formats)</li>
-                        <li>Download transcripts and subtitle files</li>
-                        <li>Track transcription job status in real-time</li>
-                    </ul>
-                    <br>
-                    <h3>Architecture:</h3>
-                    <ul style="margin: 20px 0; padding-left: 20px;">
-                        <li><strong>Frontend:</strong> Static HTML/JS hosted on S3</li>
-                        <li><strong>API:</strong> AWS API Gateway</li>
-                        <li><strong>Backend:</strong> AWS Lambda (Serverless)</li>
-                        <li><strong>Storage:</strong> AWS S3</li>
-                        <li><strong>Database:</strong> AWS DynamoDB</li>
-                        <li><strong>Transcription:</strong> AWS Transcribe</li>
-                    </ul>
-                    <br>
-                    <p style="text-align: center; color: #6c757d; margin-top: 30px;">
-                        Built with ❤️ using AWS Cloud Services
-                    </p>
-                </div>
-            </div>
-        </div>
+  <div class="main-card">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('upload')">📤 Upload Audio</button>
+      <button class="tab" onclick="switchTab('jobs')">📋 My Transcriptions</button>
+      <button class="tab" onclick="switchTab('about')">ℹ️ About</button>
     </div>
 
-    <script>
-        // ===== API URL CONFIGURATION =====
-        const getApiUrl = () => {
-            // Check if running on Amplify (production)
-            if (window.location.hostname.includes('amplifyapp.com')) {
-                // Production API
-                return 'https://ybe0mx1a1e.execute-api.us-east-1.amazonaws.com/Prod';
-            }
-            // Local development
-            return 'https://ybe0mx1a1e.execute-api.us-east-1.amazonaws.com/Prod';
-        };
-        
-        // ===== CONFIGURATION =====
-        // CHANGE THIS TO YOUR API GATEWAY URL
-        const API_URL = getApiUrl();
-        const RESULTS_BUCKET = 'audio-transcribe-results-cs6620group9-1105';
-        
-        // ===== STATE MANAGEMENT =====
-        let selectedFile = null;
-        let currentJobs = [];
-        let refreshInterval = null;
-        
-        // ===== TAB SWITCHING =====
-        function switchTab(tabName) {
-            // Update tab buttons
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            
-            // Update tab panels
-            document.querySelectorAll('.tab-panel').forEach(panel => {
-                panel.classList.remove('active');
-            });
-            document.getElementById(`${tabName}-tab`).classList.add('active');
-            
-            // Load jobs when switching to jobs tab
-            if (tabName === 'jobs') {
-                loadJobs();
-                // Start auto-refresh
-                if (refreshInterval) clearInterval(refreshInterval);
-                refreshInterval = setInterval(loadJobs, 5000);
-            } else {
-                // Stop auto-refresh when leaving jobs tab
-                if (refreshInterval) {
-                    clearInterval(refreshInterval);
-                    refreshInterval = null;
-                }
-            }
+    <div class="tab-content">
+      <!-- Upload Tab -->
+      <div id="upload-tab" class="tab-panel active">
+        <div class="upload-area" id="uploadArea"
+             onclick="document.getElementById('audioFile').click()">
+          <div style="font-size:4em;color:#667eea;margin-bottom:20px;">☁️</div>
+          <h2>Drop your audio file here</h2>
+          <p>or click to browse</p>
+          <p style="margin-top:10px;color:#6c757d;font-size:.9em;">
+            Supported: MP3, WAV, M4A (Max 25MB)
+          </p>
+        </div>
+
+        <input type="file" id="audioFile" class="file-input" accept=".mp3,.wav,.m4a,audio/*" />
+        <div id="fileInfo" class="file-info">
+          <strong>Selected File:</strong> <span id="fileName"></span><br>
+          <strong>Size:</strong> <span id="fileSize"></span>
+        </div>
+
+        <div id="uploadStatus" class="status-message"></div>
+
+        <div style="text-align:center;margin-top:20px;">
+          <button id="uploadBtn" class="btn btn-primary" onclick="uploadAudio()" style="display:none;">
+            🚀 Start Transcription
+          </button>
+          <button id="cancelBtn" class="btn btn-secondary" onclick="cancelUpload()" style="display:none;">
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <!-- Jobs Tab -->
+      <div id="jobs-tab" class="tab-panel">
+        <div style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+          <h2>Your Transcription Jobs</h2>
+          <button class="btn btn-secondary btn-small" onclick="refreshJobs()">🔄 Refresh</button>
+        </div>
+        <div id="jobsList" class="jobs-container">
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <h3>No transcriptions yet</h3>
+            <p>Upload an audio file to get started!</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- About Tab -->
+      <div id="about-tab" class="tab-panel">
+        <h2>About This Project</h2><br>
+        <p><strong>Project:</strong> Cloud-Based Audio-to-Text Transcription Service</p>
+        <p><strong>Course:</strong> CS6620 - Cloud Computing</p>
+        <p><strong>Group:</strong> Group 9</p><br>
+        <h3>Features:</h3>
+        <ul style="margin:20px 0;padding-left:20px;">
+          <li>Upload audio files (MP3, WAV, M4A)</li>
+          <li>Automatic speech-to-text transcription using AWS Transcribe</li>
+          <li>Generate subtitle files (SRT, VTT formats)</li>
+          <li>Download transcripts and subtitle files</li>
+          <li>Live preview panel (polling)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== CONFIG =====
+  const API_URL = 'https://ybe0mx1a1e.execute-api.us-east-1.amazonaws.com/Prod';
+  const RESULTS_BUCKET = 'audio-transcribe-results-cs6620group9-1105';
+
+  let selectedFile = null;
+  let refreshInterval = null;
+  const livePollers = {}; // jobId -> intervalId
+
+  // ===== Tabs =====
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(`${tabName}-tab`).classList.add('active');
+    if (tabName === 'jobs') {
+      loadJobs();
+      if (refreshInterval) clearInterval(refreshInterval);
+      refreshInterval = setInterval(loadJobs, 5000);
+    } else {
+      if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+    }
+  }
+
+  // ===== Upload UI =====
+  const fileInput = document.getElementById('audioFile');
+  const fileInfo = document.getElementById('fileInfo');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const uploadArea = document.getElementById('uploadArea');
+
+  fileInput.addEventListener('change', e => {
+    if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+  });
+
+  function handleFileSelect(file) {
+    const validExt = ['mp3','wav','m4a'];
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!validExt.includes(ext)) {
+      showStatus('Please select MP3, WAV, or M4A.', 'error');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      showStatus('File too large. Max 25MB.', 'error');
+      return;
+    }
+    selectedFile = file;
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = formatFileSize(file.size);
+    fileInfo.classList.add('show');
+    uploadBtn.style.display = 'inline-block';
+    cancelBtn.style.display = 'inline-block';
+    showStatus('File ready to upload.', 'info');
+  }
+
+  function cancelUpload() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileInfo.classList.remove('show');
+    uploadBtn.style.display = 'none';
+    cancelBtn.style.display = 'none';
+    hideStatus();
+  }
+
+  async function uploadAudio() {
+    if (!selectedFile) return showStatus('Pick a file first.', 'error');
+    try {
+      uploadBtn.disabled = true; cancelBtn.disabled = true;
+      showStatus('Getting upload URL...', 'info');
+      const r1 = await fetch(`${API_URL}/upload-url`);
+      const raw = await r1.json();
+      const data = raw.body ? JSON.parse(raw.body) : raw;
+
+      showStatus('Uploading to S3...', 'info');
+      const r2 = await fetch(data.uploadUrl, {
+        method: 'PUT',
+        body: selectedFile,
+        headers: { 'Content-Type': selectedFile.type || 'audio/mpeg' }
+      });
+      if (!r2.ok) throw new Error('Upload failed');
+
+      saveJobToSessionStorage(data.jobId, selectedFile.name);
+      showStatus(`✅ Upload ok. Job: ${data.jobId}`, 'success');
+
+      setTimeout(() => {
+        cancelUpload();
+        document.querySelectorAll('.tab')[1].click();
+      }, 1200);
+
+    } catch (e) {
+      showStatus(`❌ ${e.message}`, 'error');
+    } finally {
+      uploadBtn.disabled = false; cancelBtn.disabled = false;
+    }
+  }
+
+  function saveJobToSessionStorage(jobId, fileName) {
+    let jobs = JSON.parse(sessionStorage.getItem('transcriptionJobs') || '[]');
+    jobs.unshift({ jobId, fileName, createdAt: new Date().toISOString() });
+    jobs = jobs.slice(0, 50);
+    sessionStorage.setItem('transcriptionJobs', JSON.stringify(jobs));
+  }
+
+  // ===== Jobs list =====
+  async function loadJobs() {
+    const jobsList = document.getElementById('jobsList');
+    const sessionJobs = JSON.parse(sessionStorage.getItem('transcriptionJobs') || '[]');
+
+    if (!sessionJobs.length) {
+      jobsList.innerHTML = `
+        <div class="empty-state"><div class="empty-state-icon">📭</div>
+        <h3>No transcriptions in this session</h3><p>Upload an audio file to get started!</p></div>`;
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${API_URL}/status`);
+      const raw = await resp.json();
+      const data = raw.body ? JSON.parse(raw.body) : raw;
+      const apiJobs = data.jobs || [];
+      const apiMap = {};
+      apiJobs.forEach(j => apiMap[j.jobId] = j);
+
+      jobsList.innerHTML = sessionJobs.map(sj => {
+        const aj = apiMap[sj.jobId];
+        const status = aj?.status || 'waiting_upload';
+        return createJobCard(sj.jobId, sj.fileName, status, sj.createdAt);
+      }).join('');
+
+      // start/stop live polling based on status
+      sessionJobs.forEach(sj => {
+        const status = apiMap[sj.jobId]?.status;
+        if (status === 'transcribing') startLivePolling(sj.jobId);
+        if (status === 'completed' || status === 'failed') stopLivePolling(sj.jobId);
+      });
+
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function createJobCard(jobId, fileName, status, createdAt) {
+    const date = new Date(createdAt).toLocaleString();
+    let actions = '';
+    let livePanel = '';
+
+    if (status === 'completed') {
+      actions = `
+        <button class="btn btn-small download-btn" onclick="downloadFile('${jobId}','transcript')">📄 Transcript</button>
+        <button class="btn btn-small download-btn" onclick="downloadFile('${jobId}','srt')">📝 SRT</button>
+        <button class="btn btn-small download-btn" onclick="downloadFile('${jobId}','vtt')">🎬 VTT</button>
+        <button class="btn btn-small btn-secondary" onclick="togglePreview('${jobId}')">👀 Preview</button>
+      `;
+    }
+
+    if (status === 'transcribing') {
+      livePanel = `
+        <div class="preview-panel">
+          <strong>Live Preview (polling):</strong>
+          <div id="livebox-${jobId}" class="live-box">Waiting for partial text...</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="job-card">
+        <div class="job-header">
+          <div>
+            <strong>${fileName || 'Audio file'}</strong><br>
+            <span class="job-id">${jobId}</span><br>
+            <small style="color:#6c757d;">${date}</small>
+          </div>
+          <span class="job-status status-${status}">${status.replace('_',' ')}</span>
+        </div>
+
+        <div class="job-actions">${actions}</div>
+
+        ${livePanel}
+
+        <div class="preview-panel" id="preview-${jobId}" style="display:none;">
+          <div id="preview-status-${jobId}" class="status-message info show">Loading transcript...</div>
+          <div style="margin-top:10px;">
+            <h4>Subtitle‐style segments</h4>
+            <div id="segments-${jobId}"></div>
+          </div>
+          <div style="margin-top:10px;">
+            <h4>Full transcript</h4>
+            <pre id="transcript-text-${jobId}"
+              style="white-space:pre-wrap;background:#fff;padding:10px;border-radius:8px;border:1px solid #eee;">
+            </pre>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function refreshJobs() {
+    showStatus('Refreshing jobs...', 'info');
+    loadJobs();
+    setTimeout(hideStatus, 800);
+  }
+
+  // ===== Live polling =====
+  function startLivePolling(jobId) {
+    if (livePollers[jobId]) return;
+
+    livePollers[jobId] = setInterval(async () => {
+      try {
+        const r = await fetch(`${API_URL}/partial?jobId=${jobId}`);
+        const raw = await r.json();
+        const data = raw.body ? JSON.parse(raw.body) : raw;
+
+        const box = document.getElementById(`livebox-${jobId}`);
+        if (box) {
+          box.textContent = data.partialText
+            ? data.partialText
+            : "Still processing... (batch Transcribe outputs at end)";
         }
-        
-        // ===== FILE UPLOAD HANDLING =====
-        const uploadArea = document.getElementById('uploadArea');
-        const fileInput = document.getElementById('audioFile');
-        const fileInfo = document.getElementById('fileInfo');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
-        
-        // Drag and drop handling
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-        
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-        
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleFileSelect(files[0]);
-            }
-        });
-        
-        // File input change
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                handleFileSelect(e.target.files[0]);
-            }
-        });
-        
-        function handleFileSelect(file) {
-            // Validate file type
-            const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-m4a', 'audio/mp4'];
-            const fileExtension = file.name.split('.').pop().toLowerCase();
-            const validExtensions = ['mp3', 'wav', 'm4a'];
-            
-            if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-                showStatus('Please select a valid audio file (MP3, WAV, or M4A)', 'error');
-                return;
-            }
-            
-            // Validate file size (25MB max)
-            const maxSize = 25 * 1024 * 1024;
-            if (file.size > maxSize) {
-                showStatus('File too large! Maximum size is 25MB', 'error');
-                return;
-            }
-            
-            selectedFile = file;
-            
-            // Show file info
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileSize').textContent = formatFileSize(file.size);
-            fileInfo.classList.add('show');
-            
-            // Show upload button
-            uploadBtn.style.display = 'inline-block';
-            cancelBtn.style.display = 'inline-block';
-            
-            showStatus('File ready to upload', 'info');
-        }
-        
-        function cancelUpload() {
-            selectedFile = null;
-            fileInput.value = '';
-            fileInfo.classList.remove('show');
-            uploadBtn.style.display = 'none';
-            cancelBtn.style.display = 'none';
-            hideStatus();
-            hideProgress();
-        }
-        
-        async function uploadAudio() {
-            if (!selectedFile) {
-                showStatus('Please select a file first', 'error');
-                return;
-            }
-            
-            try {
-                // Disable buttons during upload
-                uploadBtn.disabled = true;
-                cancelBtn.disabled = true;
-                
-                // Step 1: Get upload URL from Lambda
-                showStatus('Getting upload URL...', 'info');
-                showProgress(20);
-                
-                const response = await fetch(`${API_URL}/upload-url`);
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
-                }
-                
-                const rawData = await response.json();
-                
-                // Handle both wrapped and unwrapped responses
-                let data;
-                if (rawData.body) {
-                    data = JSON.parse(rawData.body);
-                } else {
-                    data = rawData;
-                }
-                
-                console.log('Upload URL received:', data.jobId);
-                
-                // Step 2: Upload file to S3
-                showStatus('Uploading file to cloud...', 'info');
-                showProgress(50);
-                
-                const uploadResponse = await fetch(data.uploadUrl, {
-                    method: 'PUT',
-                    body: selectedFile,
-                    headers: {
-                        'Content-Type': selectedFile.type || 'audio/mpeg'
-                    }
-                });
-                
-                if (!uploadResponse.ok) {
-                    throw new Error(`Upload failed: ${uploadResponse.status}`);
-                }
-                
-                showProgress(90);
-                
-                // Step 3: Save job ID
-                saveJobToSessionStorage(data.jobId, selectedFile.name);
-                
-                showProgress(100);
-                showStatus(`✅ Upload successful! Job ID: ${data.jobId}`, 'success');
-                
-                // Reset form
-                setTimeout(() => {
-                    cancelUpload();
-                    // Switch to jobs tab to see progress
-                    document.querySelectorAll('.tab')[1].click();
-                }, 2000);
-                
-            } catch (error) {
-                console.error('Upload error:', error);
-                showStatus(`❌ Error: ${error.message}`, 'error');
-            } finally {
-                uploadBtn.disabled = false;
-                cancelBtn.disabled = false;
-                setTimeout(hideProgress, 2000);
-            }
-        }
-        
-        // ===== JOBS MANAGEMENT =====
-        function saveJobToSessionStorage(jobId, fileName) {
-            // Use sessionStorage instead of localStorage - clears when browser tab closes
-            let jobs = JSON.parse(sessionStorage.getItem('transcriptionJobs') || '[]');
-            jobs.unshift({
-                jobId: jobId,
-                fileName: fileName,
-                createdAt: new Date().toISOString(),
-                status: 'waiting_upload'
-            });
-            // Keep only last 50 jobs
-            jobs = jobs.slice(0, 50);
-            sessionStorage.setItem('transcriptionJobs', JSON.stringify(jobs));
-        }
-        
-        async function loadJobs() {
-            const jobsList = document.getElementById('jobsList');
-            
-            // Get jobs from current session only
-            const sessionJobs = JSON.parse(sessionStorage.getItem('transcriptionJobs') || '[]');
-            
-            if (sessionJobs.length === 0) {
-                jobsList.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <h3>No transcriptions in this session</h3>
-                        <p>Upload an audio file to get started!</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            try {
-                // Get job IDs from session storage
-                const sessionJobIds = sessionJobs.map(job => job.jobId);
-                
-                // Fetch real status from API for session jobs only
-                const response = await fetch(`${API_URL}/status`);
-                
-                let apiJobs = [];
-                
-                if (response.ok) {
-                    const rawData = await response.json();
-                    // Handle wrapped response
-                    let data;
-                    if (rawData.body) {
-                        data = JSON.parse(rawData.body);
-                    } else {
-                        data = rawData;
-                    }
-                    
-                    // Filter to only show jobs from this session
-                    apiJobs = (data.jobs || []).filter(job => sessionJobIds.includes(job.jobId));
-                }
-                
-                // Create a map of API job data
-                const apiJobMap = {};
-                apiJobs.forEach(job => {
-                    apiJobMap[job.jobId] = job;
-                });
-                
-                // Merge session data with API data
-                let jobsHtml = '';
-                for (const sessionJob of sessionJobs) {
-                    const apiJob = apiJobMap[sessionJob.jobId];
-                    
-                    if (apiJob) {
-                        // Use real data from API
-                        jobsHtml += createJobCard(
-                            apiJob.jobId, 
-                            sessionJob.fileName || 'Audio File', 
-                            apiJob.status || 'unknown', 
-                            apiJob.createdAt || sessionJob.createdAt
-                        );
-                    } else {
-                        // Job not found in DynamoDB - show as pending or failed
-                        const ageMinutes = (Date.now() - new Date(sessionJob.createdAt).getTime()) / 60000;
-                        const status = ageMinutes > 10 ? 'failed' : 'waiting_upload';
-                        
-                        jobsHtml += createJobCard(
-                            sessionJob.jobId, 
-                            sessionJob.fileName, 
-                            status, 
-                            sessionJob.createdAt
-                        );
-                    }
-                }
-                
-                jobsList.innerHTML = jobsHtml;
-                
-            } catch (error) {
-                console.error('Error loading jobs:', error);
-                
-                // Fallback to session storage only
-                let jobsHtml = '';
-                for (const job of sessionJobs) {
-                    jobsHtml += createJobCard(
-                        job.jobId, 
-                        job.fileName, 
-                        'unknown', 
-                        job.createdAt
-                    );
-                }
-                
-                jobsList.innerHTML = jobsHtml;
-            }
-        }
-        
-        function createJobCard(jobId, fileName, status, createdAt) {
-            const date = new Date(createdAt).toLocaleString();
-            const statusClass = `status-${status}`;
-            const statusText = status.replace('_', ' ');
-            
-            let actionsHtml = '';
-            if (status === 'completed') {
-                actionsHtml = `
-                    <button class="btn btn-small download-btn" onclick="downloadFile('${jobId}', 'transcript')">
-                        📄 Transcript
-                    </button>
-                    <button class="btn btn-small download-btn" onclick="downloadFile('${jobId}', 'srt')">
-                        📝 SRT
-                    </button>
-                    <button class="btn btn-small download-btn" onclick="downloadFile('${jobId}', 'vtt')">
-                        🎬 VTT
-                    </button>
-                `;
-            } else if (status === 'transcribing') {
-                actionsHtml = '<div class="spinner"></div>';
-            }
-            
-            return `
-                <div class="job-card">
-                    <div class="job-header">
-                        <div>
-                            <strong>${fileName || 'Unknown File'}</strong><br>
-                            <span class="job-id">${jobId}</span><br>
-                            <small style="color: #6c757d;">${date}</small>
-                        </div>
-                        <span class="job-status ${statusClass}">${statusText}</span>
-                    </div>
-                    <div class="job-actions">
-                        ${actionsHtml}
-                    </div>
-                </div>
-            `;
-        }
-        
-        function refreshJobs() {
-            showStatus('Refreshing jobs...', 'info');
-            loadJobs();
-            setTimeout(hideStatus, 1000);
-        }
-        
-        async function downloadFile(jobId, fileType) {
-            try {
-                showStatus(`Preparing download...`, 'info');
-                
-                // Construct S3 URL based on file type
-                // AWS Transcribe creates: transcript.json, transcript.srt, transcript.vtt
-                let key;
-                let fileName;
-                
-                switch(fileType) {
-                    case 'transcript':
-                        key = `transcripts/${jobId}/transcript.json`;
-                        fileName = `transcript_${jobId}.json`;
-                        break;
-                    case 'srt':
-                        key = `transcripts/${jobId}/transcript.srt`;
-                        fileName = `subtitles_${jobId}.srt`;
-                        break;
-                    case 'vtt':
-                        key = `transcripts/${jobId}/transcript.vtt`;
-                        fileName = `subtitles_${jobId}.vtt`;
-                        break;
-                    default:
-                        throw new Error('Unknown file type');
-                }
-                
-                // Generate S3 URL
-                const url = `https://${RESULTS_BUCKET}.s3.amazonaws.com/${key}`;
-                
-                // Download file
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error('File not found. It may still be processing.');
-                }
-                
-                const blob = await response.blob();
-                const downloadUrl = window.URL.createObjectURL(blob);
-                
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(downloadUrl);
-                
-                showStatus('✅ Download started!', 'success');
-                setTimeout(hideStatus, 2000);
-                
-            } catch (error) {
-                console.error('Download error:', error);
-                showStatus(`❌ Download failed: ${error.message}`, 'error');
-            }
-        }
-        
-        // ===== UTILITY FUNCTIONS =====
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-        
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('uploadStatus');
-            statusDiv.textContent = message;
-            statusDiv.className = `status-message ${type} show`;
-        }
-        
-        function hideStatus() {
-            const statusDiv = document.getElementById('uploadStatus');
-            statusDiv.classList.remove('show');
-        }
-        
-        function showProgress(percent) {
-            const container = document.getElementById('progressContainer');
-            const fill = document.getElementById('progressFill');
-            container.classList.add('show');
-            fill.style.width = percent + '%';
-        }
-        
-        function hideProgress() {
-            const container = document.getElementById('progressContainer');
-            container.classList.remove('show');
-            document.getElementById('progressFill').style.width = '0%';
-        }
-        
-        // ===== INITIALIZATION =====
-        document.addEventListener('DOMContentLoaded', () => {
-            // Load jobs on page load if on jobs tab
-            if (document.getElementById('jobs-tab').classList.contains('active')) {
-                loadJobs();
-            }
-        });
-    </script>
+      } catch (e) {
+        console.error(e);
+      }
+    }, 3000);
+  }
+
+  function stopLivePolling(jobId) {
+    if (!livePollers[jobId]) return;
+    clearInterval(livePollers[jobId]);
+    delete livePollers[jobId];
+  }
+
+  // ===== Completed preview =====
+  async function togglePreview(jobId) {
+    const panel = document.getElementById(`preview-${jobId}`);
+    const isOpen = panel.style.display === 'block';
+    panel.style.display = isOpen ? 'none' : 'block';
+    if (isOpen) return;
+    if (panel.dataset.loaded === 'true') return;
+    panel.dataset.loaded = 'true';
+
+    const statusDiv = document.getElementById(`preview-status-${jobId}`);
+    const transcriptPre = document.getElementById(`transcript-text-${jobId}`);
+    const segmentsDiv = document.getElementById(`segments-${jobId}`);
+
+    statusDiv.textContent = 'Fetching transcript.json from S3...';
+
+    const jsonUrl = `https://${RESULTS_BUCKET}.s3.amazonaws.com/transcripts/${jobId}/transcript.json`;
+    const res = await fetch(jsonUrl);
+    if (!res.ok) {
+      statusDiv.textContent = `❌ Preview failed: ${res.statusText}`;
+      statusDiv.className = 'status-message error show';
+      return;
+    }
+    const data = await res.json();
+
+    const fullText = (data.results && data.results.transcripts)
+      ? data.results.transcripts.map(t => t.transcript).join("\n\n")
+      : JSON.stringify(data, null, 2);
+    transcriptPre.textContent = fullText;
+
+    const items = data.results?.items || [];
+    let segments = [], cur = {start:null,end:null,text:[]};
+    for (const it of items) {
+      if (it.type !== 'pronunciation') continue;
+      const s = parseFloat(it.start_time);
+      const e = parseFloat(it.end_time);
+      const w = it.alternatives?.[0]?.content;
+      if (cur.start === null) cur.start = s;
+      cur.end = e;
+      cur.text.push(w);
+      if (cur.end - cur.start > 4.5) {
+        segments.push(cur);
+        cur = {start:null,end:null,text:[]};
+      }
+    }
+    if (cur.text.length) segments.push(cur);
+
+    segmentsDiv.innerHTML = segments.map((seg,i) =>
+      `<div class="segment-line" id="seg-${jobId}-${i}"
+        data-start="${seg.start}" data-end="${seg.end}">
+        <strong>[${seg.start.toFixed(2)} → ${seg.end.toFixed(2)}]</strong>
+        ${seg.text.join(" ")}
+      </div>`
+    ).join('');
+
+    statusDiv.textContent = '✅ Subtitle preview loaded.';
+  }
+
+  // ===== Downloads =====
+  async function downloadFile(jobId, fileType) {
+    try {
+      let key, fileName;
+      if (fileType === 'transcript') {
+        key = `transcripts/${jobId}/transcript.json`;
+        fileName = `transcript_${jobId}.json`;
+      } else if (fileType === 'srt') {
+        key = `transcripts/${jobId}/transcript.srt`;
+        fileName = `subtitles_${jobId}.srt`;
+      } else if (fileType === 'vtt') {
+        key = `transcripts/${jobId}/transcript.vtt`;
+        fileName = `subtitles_${jobId}.vtt`;
+      } else {
+        throw new Error('Unknown file type');
+      }
+
+      const url = `https://${RESULTS_BUCKET}.s3.amazonaws.com/${key}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('File not ready');
+
+      const blob = await r.blob();
+      const dl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = dl; a.download = fileName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      window.URL.revokeObjectURL(dl);
+      showStatus('✅ Download started!', 'success');
+      setTimeout(hideStatus, 1500);
+    } catch (e) {
+      showStatus(`❌ ${e.message}`, 'error');
+    }
+  }
+
+  // ===== Utils =====
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1)+' KB';
+    return (bytes/(1024*1024)).toFixed(1)+' MB';
+  }
+  function showStatus(msg, type) {
+    const d = document.getElementById('uploadStatus');
+    d.textContent = msg;
+    d.className = `status-message ${type} show`;
+  }
+  function hideStatus() {
+    document.getElementById('uploadStatus').classList.remove('show');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {});
+</script>
 </body>
 </html>
