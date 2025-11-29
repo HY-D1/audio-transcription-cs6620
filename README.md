@@ -20,7 +20,3 @@ interactive previews, karaoke-style playback, and subtitle downloads.
 - **Database**: AWS DynamoDB (job metadata, status)  
 - **Transcription**: AWS Transcribe (async jobs)  
 - **Monitoring**: CloudWatch Logs & Metrics
-
-## Deployment
-- Frontend: connected to AWS Amplify
-- Backend: deploy Lambda + API Gateway
