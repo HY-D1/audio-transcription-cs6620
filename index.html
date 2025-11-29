@@ -308,14 +308,17 @@
   function switchTab(tabName) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     event.target.classList.add('active');
-
+  
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.getElementById(`${tabName}-tab`).classList.add('active');
-
+  
     if (tabName === 'jobs') {
       loadJobs();
-      if (refreshInterval) clearInterval(refreshInterval);
-      refreshInterval = setInterval(loadJobs, 5000);
+  
+      // Only auto-refresh if NO preview is open
+      if (!refreshInterval && openPreviews.size === 0) {
+        refreshInterval = setInterval(loadJobs, 5000);
+      }
     } else {
       if (refreshInterval) {
         clearInterval(refreshInterval);
@@ -657,19 +660,37 @@
   async function togglePreview(jobId) {
     const panel = document.getElementById(`preview-${jobId}`);
     const isOpen = panel.style.display === 'block';
-
+  
     if (isOpen) {
+      // Closing preview
       panel.style.display = 'none';
       openPreviews.delete(jobId);
+  
+      // If no previews are open anymore AND jobs tab is active,
+      // restart auto-refresh
+      const jobsTabActive = document
+        .getElementById('jobs-tab')
+        .classList.contains('active');
+  
+      if (openPreviews.size === 0 && jobsTabActive && !refreshInterval) {
+        refreshInterval = setInterval(loadJobs, 5000);
+      }
       return;
     }
-
+  
+    // Opening preview
     panel.style.display = 'block';
     openPreviews.add(jobId);
-
+  
+    // Pause auto-refresh so we don't destroy the audio element
+    if (refreshInterval) {
+      clearInterval(refreshInterval);
+      refreshInterval = null;
+    }
+  
     if (panel.dataset.loaded === 'true') return;
     panel.dataset.loaded = 'true';
-
+  
     await loadPreview(jobId);
   }
 
