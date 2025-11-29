@@ -132,7 +132,17 @@
     }
     @keyframes spin { 0%{transform:rotate(0);} 100%{transform:rotate(360deg);} }
 
-    /* Preview panels */
+    /* Preview panels + karaoke words */
+    .karaoke-word {
+      padding: 1px 2px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .karaoke-word.active {
+      background: #facc15;  /* yellow */
+      color: #111827;       /* dark text */
+    }
     .preview-panel {
       background:#fff; border-radius:10px; padding:12px;
       border:1px solid #e9ecef; margin-top:12px;
@@ -199,7 +209,7 @@
 
         <div id="uploadStatus" class="status-message"></div>
 
-        <!-- NEW: waveform section -->
+        <!-- Waveform section -->
         <div id="waveform-section" style="display:none; margin-top:20px;">
           <h3 style="margin-bottom:10px;">Audio Preview</h3>
           <div id="waveform"
@@ -290,6 +300,10 @@
   // remember open preview jobIds so refresh won't close them
   let openPreviews = new Set();
 
+  // karaoke state
+  const wordTimingsByJob = {};       // jobId -> [{start, end, word}]
+  const currentWordIndexByJob = {};  // jobId -> index
+
   // ===== Tabs =====
   function switchTab(tabName) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -354,17 +368,15 @@
 
     showStatus('File ready to upload', 'info');
 
-    // ==== NEW: waveform handling ====
+    // waveform handling
     const wfSection = document.getElementById('waveform-section');
     wfSection.style.display = 'block';
 
-    // Create / refresh object URL
     if (currentAudioUrl) {
       URL.revokeObjectURL(currentAudioUrl);
     }
     currentAudioUrl = URL.createObjectURL(file);
 
-    // Initialize WaveSurfer once
     if (!waveSurfer) {
       waveSurfer = WaveSurfer.create({
         container: '#waveform',
@@ -382,7 +394,6 @@
       });
     }
 
-    // Load new audio into waveform
     waveSurfer.load(currentAudioUrl);
     document.getElementById('waveformInfo').textContent = 'Waveform loaded. Press Play.';
     document.getElementById('waveformPlayBtn').textContent = '▶️ Play';
@@ -396,7 +407,6 @@
     cancelBtn.style.display = 'none';
     hideStatus();
 
-    // ==== NEW: clean up waveform ====
     const wfSection = document.getElementById('waveform-section');
     wfSection.style.display = 'none';
 
@@ -452,7 +462,7 @@
     }
   }
 
-  // ===== Waveform play/pause =====
+  // Waveform play/pause
   function toggleWaveformPlay() {
     if (!waveSurfer) return;
 
@@ -516,7 +526,6 @@
 
       jobsList.innerHTML = jobsHtml;
 
-      // start/stop live polling based on status
       sessionJobs.forEach(sj => {
         const status = apiMap[sj.jobId]?.status;
         if (status === 'transcribing') startLivePolling(sj.jobId);
@@ -583,6 +592,13 @@
         ${livePanelHtml}
 
         <div class="preview-panel" id="preview-${jobId}" style="display:none;">
+          <div style="margin-bottom:10px;">
+            <h4>Audio Playback</h4>
+            <audio id="audio-${jobId}" controls
+                   src="https://audio-transcribe-uploads-cs6620group9-1105.s3.amazonaws.com/uploads/${jobId}/audio.mp3">
+            </audio>
+          </div>
+
           <div id="preview-status-${jobId}" class="status-message info show">
             Loading transcript...
           </div>
@@ -609,7 +625,7 @@
     setTimeout(hideStatus, 800);
   }
 
-  // ===== Live polling for partial transcript =====
+  // Live polling for partial transcript
   function startLivePolling(jobId) {
     if (livePollers[jobId]) return;
 
@@ -676,25 +692,47 @@
 
     const data = await res.json();
 
-    const fullText = (data.results && data.results.transcripts)
-      ? data.results.transcripts.map(t => t.transcript).join("\n\n")
-      : (data.text || JSON.stringify(data, null, 2));
-
-    transcriptPre.textContent = fullText;
-
+    // 1) Build word timings from AWS Transcribe items
     const items = data.results?.items || [];
-    let segments = [];
-    let cur = { start: null, end: null, text: [] };
+    const wordTimings = [];
 
     for (const it of items) {
       if (it.type !== 'pronunciation') continue;
-      const s = parseFloat(it.start_time);
-      const e = parseFloat(it.end_time);
-      const w = it.alternatives?.[0]?.content;
+      const start = parseFloat(it.start_time);
+      const end   = parseFloat(it.end_time);
+      const word  = it.alternatives?.[0]?.content || '';
+      wordTimings.push({ start, end, word });
+    }
 
-      if (cur.start === null) cur.start = s;
-      cur.end = e;
-      cur.text.push(w);
+    wordTimingsByJob[jobId] = wordTimings;
+    currentWordIndexByJob[jobId] = 0;
+
+    // 2) Render full transcript as clickable word spans
+    if (wordTimings.length > 0) {
+      const html = wordTimings.map((w, idx) =>
+        `<span class="karaoke-word"
+                data-idx="${idx}"
+                data-start="${w.start}"
+                data-end="${w.end}">
+           ${w.word}
+         </span>`
+      ).join(' ');
+      transcriptPre.innerHTML = html;
+    } else {
+      const fullText = (data.results && data.results.transcripts)
+        ? data.results.transcripts.map(t => t.transcript).join("\n\n")
+        : (data.text || JSON.stringify(data, null, 2));
+      transcriptPre.textContent = fullText;
+    }
+
+    // 3) Build subtitle-style segments
+    let segments = [];
+    let cur = { start: null, end: null, text: [] };
+
+    for (const w of wordTimings) {
+      if (cur.start === null) cur.start = w.start;
+      cur.end = w.end;
+      cur.text.push(w.word);
 
       if (cur.end - cur.start > 4.5) {
         segments.push(cur);
@@ -705,15 +743,70 @@
 
     segmentsDiv.innerHTML = segments.length
       ? segments.map((seg, i) =>
-          `<div class="segment-line" id="seg-${jobId}-${i}">
-            <strong>[${seg.start.toFixed(2)} → ${seg.end.toFixed(2)}]</strong>
-            ${seg.text.join(" ")}
-          </div>`
+          `<div class="segment-line"
+                id="seg-${jobId}-${i}"
+                data-start="${seg.start}">
+             <strong>[${seg.start.toFixed(2)} → ${seg.end.toFixed(2)}]</strong>
+             ${seg.text.join(" ")}
+           </div>`
         ).join('')
       : `<div style="color:#6c757d;">No word-level segments available.</div>`;
 
     statusDiv.textContent = '✅ Subtitle preview loaded.';
     statusDiv.className = 'status-message success show';
+
+    // 4) Wire audio → highlight sync + click-to-seek
+    const audio = document.getElementById(`audio-${jobId}`);
+
+    if (audio && wordTimings.length > 0) {
+      audio.addEventListener('timeupdate', () => {
+        syncKaraoke(jobId, audio.currentTime);
+      });
+
+      transcriptPre.addEventListener('click', (e) => {
+        const span = e.target.closest('.karaoke-word');
+        if (!span) return;
+        const t = parseFloat(span.dataset.start || '0');
+        audio.currentTime = t;
+      });
+
+      segmentsDiv.addEventListener('click', (e) => {
+        const line = e.target.closest('.segment-line');
+        if (!line) return;
+        const t = parseFloat(line.dataset.start || '0');
+        audio.currentTime = t;
+      });
+    }
+  }
+
+  // Karaoke sync helper
+  function syncKaraoke(jobId, currentTime) {
+    const words = wordTimingsByJob[jobId];
+    if (!words || words.length === 0) return;
+
+    let idx = currentWordIndexByJob[jobId] ?? 0;
+
+    while (idx < words.length - 1 && currentTime >= words[idx].end) {
+      idx++;
+    }
+    while (idx > 0 && currentTime < words[idx].start) {
+      idx--;
+    }
+
+    if (idx === currentWordIndexByJob[jobId]) return;
+    currentWordIndexByJob[jobId] = idx;
+
+    const container = document.getElementById(`transcript-text-${jobId}`);
+    if (!container) return;
+
+    const prev = container.querySelector('.karaoke-word.active');
+    if (prev) prev.classList.remove('active');
+
+    const next = container.querySelector(`.karaoke-word[data-idx="${idx}"]`);
+    if (next) {
+      next.classList.add('active');
+      next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }
 
   // ===== Download files =====
