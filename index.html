@@ -140,8 +140,8 @@
       transition: background 0.15s ease;
     }
     .karaoke-word.active {
-      background: #facc15;  /* yellow */
-      color: #111827;       /* dark text */
+      background: #facc15;
+      color: #111827;
     }
     .preview-panel {
       background:#fff; border-radius:10px; padding:12px;
@@ -181,9 +181,9 @@
 
   <div class="main-card">
     <div class="tabs">
-      <button class="tab active" onclick="switchTab('upload')">📤 Upload Audio</button>
-      <button class="tab" onclick="switchTab('jobs')">📋 My Transcriptions</button>
-      <button class="tab" onclick="switchTab('about')">ℹ️ About</button>
+      <button class="tab active" onclick="switchTab('upload', event)">📤 Upload Audio</button>
+      <button class="tab" onclick="switchTab('jobs', event)">📋 My Transcriptions</button>
+      <button class="tab" onclick="switchTab('about', event)">ℹ️ About</button>
     </div>
 
     <div class="tab-content">
@@ -305,15 +305,20 @@
   const currentWordIndexByJob = {};  // jobId -> index
 
   // ===== Tabs =====
-  function switchTab(tabName) {
+  function switchTab(tabName, evt) {
+    // set tab active
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
-  
+    if (evt && evt.currentTarget) evt.currentTarget.classList.add('active');
+
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.getElementById(`${tabName}-tab`).classList.add('active');
-  
+
     if (tabName === 'jobs') {
-      loadJobs();          // one immediate refresh
+      // immediate load and start periodic refresh (only if not already running)
+      loadJobs();
+      if (!refreshInterval) {
+        refreshInterval = setInterval(loadJobs, 5000);
+      }
     } else {
       // leaving Jobs tab → stop auto refresh completely
       if (refreshInterval) {
@@ -322,7 +327,6 @@
       }
     }
   }
-
 
   // ===== Upload Handling =====
   const fileInput = document.getElementById('audioFile');
@@ -394,6 +398,7 @@
       });
     }
 
+    // load preview audio file into WaveSurfer
     waveSurfer.load(currentAudioUrl);
     document.getElementById('waveformInfo').textContent = 'Waveform loaded. Press Play.';
     document.getElementById('waveformPlayBtn').textContent = '▶️ Play';
@@ -450,6 +455,7 @@
 
       setTimeout(() => {
         cancelUpload();
+        // switch to jobs tab
         document.querySelectorAll('.tab')[1].click();
       }, 1200);
 
@@ -657,37 +663,34 @@
   async function togglePreview(jobId) {
     const panel = document.getElementById(`preview-${jobId}`);
     const isOpen = panel.style.display === 'block';
-  
+
     if (isOpen) {
       // Closing preview
       panel.style.display = 'none';
       openPreviews.delete(jobId);
-  
+
       // If no previews are open anymore AND jobs tab is active,
-      // restart auto-refresh
-      const jobsTabActive = document
-        .getElementById('jobs-tab')
-        .classList.contains('active');
-  
+      // restart auto-refresh (only if it isn't already running)
+      const jobsTabActive = document.getElementById('jobs-tab').classList.contains('active');
       if (openPreviews.size === 0 && jobsTabActive && !refreshInterval) {
         refreshInterval = setInterval(loadJobs, 5000);
       }
       return;
     }
-  
+
     // Opening preview
     panel.style.display = 'block';
     openPreviews.add(jobId);
-  
+
     // Pause auto-refresh so we don't destroy the audio element
     if (refreshInterval) {
       clearInterval(refreshInterval);
       refreshInterval = null;
     }
-  
+
     if (panel.dataset.loaded === 'true') return;
     panel.dataset.loaded = 'true';
-  
+
     await loadPreview(jobId);
   }
 
@@ -777,15 +780,18 @@
     const audio = document.getElementById(`audio-${jobId}`);
 
     if (audio && wordTimings.length > 0) {
-      audio.addEventListener('timeupdate', () => {
-        syncKaraoke(jobId, audio.currentTime);
-      });
+      // Protect against duplicated listeners: remove existing before adding
+      audio.removeEventListener('timeupdate', audio._karaokeHandler);
+      audio._karaokeHandler = () => syncKaraoke(jobId, audio.currentTime);
+      audio.addEventListener('timeupdate', audio._karaokeHandler);
 
       transcriptPre.addEventListener('click', (e) => {
         const span = e.target.closest('.karaoke-word');
         if (!span) return;
         const t = parseFloat(span.dataset.start || '0');
         audio.currentTime = t;
+        // ensure it plays when user clicks
+        try { audio.play().catch(()=>{}); } catch {}
       });
 
       segmentsDiv.addEventListener('click', (e) => {
@@ -793,6 +799,7 @@
         if (!line) return;
         const t = parseFloat(line.dataset.start || '0');
         audio.currentTime = t;
+        try { audio.play().catch(()=>{}); } catch {}
       });
     }
   }
@@ -881,7 +888,20 @@
     document.getElementById('uploadStatus').classList.remove('show');
   }
 
-  document.addEventListener('DOMContentLoaded', () => {});
+  // Clear intervals on unload
+  window.addEventListener('beforeunload', () => {
+    if (refreshInterval) clearInterval(refreshInterval);
+    Object.values(livePollers).forEach(id => clearInterval(id));
+  });
+
+  // Initialise: if user lands on Jobs tab directly (rare), start refresh
+  document.addEventListener('DOMContentLoaded', () => {
+    const jobsTabActive = document.getElementById('jobs-tab').classList.contains('active');
+    if (jobsTabActive && !refreshInterval) {
+      refreshInterval = setInterval(loadJobs, 5000);
+      loadJobs();
+    }
+  });
 </script>
 </body>
 </html>
