@@ -199,6 +199,21 @@
 
         <div id="uploadStatus" class="status-message"></div>
 
+        <!-- NEW: waveform section -->
+        <div id="waveform-section" style="display:none; margin-top:20px;">
+          <h3 style="margin-bottom:10px;">Audio Preview</h3>
+          <div id="waveform"
+               style="width:100%; height:80px; background:#0f172a; border-radius:8px;"></div>
+          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <button id="waveformPlayBtn" class="btn btn-secondary btn-small"
+                    onclick="toggleWaveformPlay()">
+              ▶️ Play
+            </button>
+            <span id="waveformInfo"
+                  style="font-size:0.9em; color:#6c757d;">Ready to preview.</span>
+          </div>
+        </div>
+
         <div style="text-align:center;margin-top:20px;">
           <button id="uploadBtn" class="btn btn-primary"
                   onclick="uploadAudio()" style="display:none;">
@@ -255,6 +270,9 @@
   </div>
 </div>
 
+<!-- WaveSurfer library -->
+<script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+
 <script>
   // ===== CONFIG =====
   const API_URL = 'https://ybe0mx1a1e.execute-api.us-east-1.amazonaws.com/Prod';
@@ -265,7 +283,11 @@
   let refreshInterval = null;
   const livePollers = {}; // jobId -> intervalId
 
-  // NEW: remember open preview jobIds so refresh won't close them
+  // waveform state
+  let waveSurfer = null;
+  let currentAudioUrl = null;
+
+  // remember open preview jobIds so refresh won't close them
   let openPreviews = new Set();
 
   // ===== Tabs =====
@@ -331,6 +353,39 @@
     cancelBtn.style.display = 'inline-block';
 
     showStatus('File ready to upload', 'info');
+
+    // ==== NEW: waveform handling ====
+    const wfSection = document.getElementById('waveform-section');
+    wfSection.style.display = 'block';
+
+    // Create / refresh object URL
+    if (currentAudioUrl) {
+      URL.revokeObjectURL(currentAudioUrl);
+    }
+    currentAudioUrl = URL.createObjectURL(file);
+
+    // Initialize WaveSurfer once
+    if (!waveSurfer) {
+      waveSurfer = WaveSurfer.create({
+        container: '#waveform',
+        height: 80,
+        waveColor: '#38bdf8',
+        progressColor: '#a855f7',
+        cursorColor: '#facc15',
+        normalize: true,
+      });
+
+      waveSurfer.on('finish', () => {
+        const btn = document.getElementById('waveformPlayBtn');
+        btn.textContent = '▶️ Play';
+        document.getElementById('waveformInfo').textContent = 'Playback finished.';
+      });
+    }
+
+    // Load new audio into waveform
+    waveSurfer.load(currentAudioUrl);
+    document.getElementById('waveformInfo').textContent = 'Waveform loaded. Press Play.';
+    document.getElementById('waveformPlayBtn').textContent = '▶️ Play';
   }
 
   function cancelUpload() {
@@ -340,6 +395,19 @@
     uploadBtn.style.display = 'none';
     cancelBtn.style.display = 'none';
     hideStatus();
+
+    // ==== NEW: clean up waveform ====
+    const wfSection = document.getElementById('waveform-section');
+    wfSection.style.display = 'none';
+
+    if (waveSurfer) {
+      waveSurfer.stop();
+      waveSurfer.empty();
+    }
+    if (currentAudioUrl) {
+      URL.revokeObjectURL(currentAudioUrl);
+      currentAudioUrl = null;
+    }
   }
 
   async function uploadAudio() {
@@ -381,6 +449,24 @@
     } finally {
       uploadBtn.disabled = false;
       cancelBtn.disabled = false;
+    }
+  }
+
+  // ===== Waveform play/pause =====
+  function toggleWaveformPlay() {
+    if (!waveSurfer) return;
+
+    const btn = document.getElementById('waveformPlayBtn');
+    const info = document.getElementById('waveformInfo');
+
+    if (waveSurfer.isPlaying()) {
+      waveSurfer.pause();
+      btn.textContent = '▶️ Play';
+      info.textContent = 'Paused.';
+    } else {
+      waveSurfer.play();
+      btn.textContent = '⏸ Pause';
+      info.textContent = 'Playing...';
     }
   }
 
@@ -437,7 +523,7 @@
         if (status === 'completed' || status === 'failed') stopLivePolling(sj.jobId);
       });
 
-      // IMPORTANT FIX: restore any previews that were open before refresh
+      // restore open previews
       for (const jobId of openPreviews) {
         const panel = document.getElementById(`preview-${jobId}`);
         if (panel) {
@@ -551,7 +637,7 @@
     delete livePollers[jobId];
   }
 
-  // ===== Preview logic (FIXED to not auto-close) =====
+  // ===== Preview logic =====
   async function togglePreview(jobId) {
     const panel = document.getElementById(`preview-${jobId}`);
     const isOpen = panel.style.display === 'block';
@@ -590,14 +676,12 @@
 
     const data = await res.json();
 
-    // full text for AWS Transcribe or your custom format
     const fullText = (data.results && data.results.transcripts)
       ? data.results.transcripts.map(t => t.transcript).join("\n\n")
       : (data.text || JSON.stringify(data, null, 2));
 
     transcriptPre.textContent = fullText;
 
-    // Build subtitle-style segments if AWS Transcribe items exist
     const items = data.results?.items || [];
     let segments = [];
     let cur = { start: null, end: null, text: [] };
