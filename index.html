@@ -102,7 +102,7 @@
     }
 
     /* Jobs */
-    .jobs-container { max-height:500px; overflow-y:auto; }
+    .jobs-container { max-height:500px; overflow-y:auto; padding-right:8px; }
     .job-card {
       background:#f8f9fa; border-radius:10px; padding:20px; margin-bottom:15px;
       transition:all .3s ease; border:2px solid transparent;
@@ -134,15 +134,24 @@
 
     /* Preview panels + karaoke words */
     .karaoke-word {
-      padding: 1px 2px;
-      border-radius: 3px;
+      display: inline-block;             /* make chips that flow naturally */
+      padding: 6px 8px;                  /* small comfortable padding */
+      margin: 4px 6px 4px 0;             /* gap between chips */
+      border-radius: 6px;
       cursor: pointer;
-      transition: background 0.15s ease;
-    }
-    .karaoke-word.active {
-      background: #facc15;
+      transition: background 0.12s ease, transform 0.08s ease;
+      background: transparent;
       color: #111827;
+      font-size: 1rem;
+      line-height: 1.3;
     }
+    .karaoke-word:hover { transform: translateY(-1px); background: rgba(166, 135, 255, 0.08); }
+    .karaoke-word.active {
+      background: #ffd54a;               /* softer yellow */
+      color: #0b1220;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.06);
+    }
+
     .preview-panel {
       background:#fff; border-radius:10px; padding:12px;
       border:1px solid #e9ecef; margin-top:12px;
@@ -157,6 +166,25 @@
       background:#0f172a; color:#f8fafc; padding:12px; border-radius:8px; margin-top:10px;
       font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       white-space:pre-wrap; min-height:80px;
+    }
+
+    /* NEW: transcript styling - make words flow and wrap */
+    .transcript-pre {
+      white-space: normal;               /* normal wrapping */
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;                          /* space between words */
+      align-items: flex-start;
+      background:#fff;
+      padding:14px;
+      border-radius:8px;
+      border:1px solid #eee;
+      min-height: 80px;
+      max-height: 260px;
+      overflow: auto;
+      font-size: 1rem;
+      line-height: 1.4;
+      color: #0b1220;
     }
 
     /* Empty State */
@@ -609,11 +637,11 @@
             Loading transcript...
           </div>
 
-          <!-- FULL TRANSCRIPT is now placed BEFORE subtitle-style segments -->
+          <!-- FULL TRANSCRIPT is placed BEFORE subtitle-style segments -->
           <div style="margin-top:10px;">
             <h4>Full transcript</h4>
-            <pre id="transcript-text-${jobId}"
-                 style="white-space:pre-wrap;background:#fff;padding:10px;border-radius:8px;border:1px solid #eee;">
+            <pre id="transcript-text-${jobId}" class="transcript-pre"
+                 aria-label="Full transcript for job ${jobId}">
             </pre>
           </div>
 
@@ -736,14 +764,15 @@
                 data-idx="${idx}"
                 data-start="${w.start}"
                 data-end="${w.end}">
-           ${w.word}
+           ${escapeHtml(w.word)}
          </span>`
-      ).join(' ');
+      ).join('');
       transcriptPre.innerHTML = html;
     } else {
       const fullText = (data.results && data.results.transcripts)
         ? data.results.transcripts.map(t => t.transcript).join("\n\n")
         : (data.text || JSON.stringify(data, null, 2));
+      // fallback into a flowing paragraph if no word-level timings
       transcriptPre.textContent = fullText;
     }
 
@@ -769,7 +798,7 @@
                 id="seg-${jobId}-${i}"
                 data-start="${seg.start}">
              <strong>[${seg.start.toFixed(2)} → ${seg.end.toFixed(2)}]</strong>
-             ${seg.text.join(" ")}
+             ${escapeHtml(seg.text.join(" "))}
            </div>`
         ).join('')
       : `<div style="color:#6c757d;">No word-level segments available.</div>`;
@@ -782,7 +811,9 @@
 
     if (audio && wordTimings.length > 0) {
       // Protect against duplicated listeners: remove existing before adding
-      audio.removeEventListener('timeupdate', audio._karaokeHandler);
+      if (audio._karaokeHandler) {
+        audio.removeEventListener('timeupdate', audio._karaokeHandler);
+      }
       audio._karaokeHandler = () => syncKaraoke(jobId, audio.currentTime);
       audio.addEventListener('timeupdate', audio._karaokeHandler);
 
@@ -791,7 +822,6 @@
         if (!span) return;
         const t = parseFloat(span.dataset.start || '0');
         audio.currentTime = t;
-        // ensure it plays when user clicks
         try { audio.play().catch(()=>{}); } catch {}
       });
 
@@ -887,6 +917,14 @@
 
   function hideStatus() {
     document.getElementById('uploadStatus').classList.remove('show');
+  }
+
+  // small HTML escape for safety when injecting transcript pieces
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, function (m) {
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
+    });
   }
 
   // Clear intervals on unload
