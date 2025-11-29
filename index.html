@@ -313,19 +313,16 @@
     document.getElementById(`${tabName}-tab`).classList.add('active');
   
     if (tabName === 'jobs') {
-      loadJobs();
-  
-      // Only auto-refresh if NO preview is open
-      if (!refreshInterval && openPreviews.size === 0) {
-        refreshInterval = setInterval(loadJobs, 5000);
-      }
+      loadJobs();          // one immediate refresh
     } else {
+      // leaving Jobs tab → stop auto refresh completely
       if (refreshInterval) {
         clearInterval(refreshInterval);
         refreshInterval = null;
       }
     }
   }
+
 
   // ===== Upload Handling =====
   const fileInput = document.getElementById('audioFile');
