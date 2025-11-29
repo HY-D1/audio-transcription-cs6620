@@ -102,7 +102,7 @@
     }
 
     /* Jobs */
-    .jobs-container { max-height:500px; overflow-y:auto; padding-right:8px; }
+    .jobs-container { max-height:500px; overflow-y:auto; }
     .job-card {
       background:#f8f9fa; border-radius:10px; padding:20px; margin-bottom:15px;
       transition:all .3s ease; border:2px solid transparent;
@@ -132,41 +132,17 @@
     }
     @keyframes spin { 0%{transform:rotate(0);} 100%{transform:rotate(360deg);} }
 
-    /* Preview panels + karaoke words (updated highlight styles) */
-    /* make the transcript container allow inline flow */
-    .preview-panel pre {
-      white-space: normal;            /* allow words to flow naturally instead of forcing weird line breaks */
-      font-family: inherit;
-      font-size: 1rem;
-      color: #111827;
-      overflow-wrap: break-word;
-    }
-
+    /* Preview panels + karaoke words */
     .karaoke-word {
-      display: inline-block;        /* keep words inline but permit padding */
-      padding: 0 6px;               /* small horizontal padding */
-      margin: 0 3px;                /* small gap between words */
-      border-radius: 6px;           /* soft corners */
+      padding: 1px 2px;
+      border-radius: 3px;
       cursor: pointer;
-      transition: background .12s ease, transform .08s ease;
-      line-height: 1.25;            /* compact line height to avoid tall blocks */
-      font-weight: 500;
-      user-select: text;
+      transition: background 0.15s ease;
     }
-
-    /* subtle, modern highlight: semi-transparent yellow with gentle inset */
     .karaoke-word.active {
-      background: rgba(250, 204, 21, 0.28); /* transparent yellow */
-      color: #111827;
-      box-shadow: 0 1px 0 rgba(0,0,0,0.04) inset;
-      transform: translateY(-1px);
-    }
-
-    .karaoke-word::selection {
-      background: rgba(250,204,21,0.45);
+      background: #facc15;
       color: #111827;
     }
-
     .preview-panel {
       background:#fff; border-radius:10px; padding:12px;
       border:1px solid #e9ecef; margin-top:12px;
@@ -633,16 +609,17 @@
             Loading transcript...
           </div>
 
-          <div style="margin-top:10px;">
-            <h4>Subtitle‐style segments</h4>
-            <div id="segments-${jobId}"></div>
-          </div>
-
+          <!-- FULL TRANSCRIPT is now placed BEFORE subtitle-style segments -->
           <div style="margin-top:10px;">
             <h4>Full transcript</h4>
             <pre id="transcript-text-${jobId}"
-                 style="background:#fff;padding:10px;border-radius:8px;border:1px solid #eee;">
+                 style="white-space:pre-wrap;background:#fff;padding:10px;border-radius:8px;border:1px solid #eee;">
             </pre>
+          </div>
+
+          <div style="margin-top:10px;">
+            <h4>Subtitle‐style segments</h4>
+            <div id="segments-${jobId}"></div>
           </div>
         </div>
       </div>
@@ -720,7 +697,7 @@
 
   async function loadPreview(jobId) {
     const statusDiv = document.getElementById(`preview-status-${jobId}`);
-    let transcriptPre = document.getElementById(`transcript-text-${jobId}`);
+    const transcriptPre = document.getElementById(`transcript-text-${jobId}`);
     const segmentsDiv = document.getElementById(`segments-${jobId}`);
 
     statusDiv.textContent = 'Fetching transcript.json from S3...';
@@ -753,21 +730,13 @@
     currentWordIndexByJob[jobId] = 0;
 
     // 2) Render full transcript as clickable word spans
-    // clear previous content and listeners to avoid duplicates
-    transcriptPre.innerHTML = '';
-    transcriptPre.style.whiteSpace = 'normal'; // ensure flow
-
-    // remove old click handlers if any
-    transcriptPre.onclick = null;
-    segmentsDiv.onclick = null;
-
     if (wordTimings.length > 0) {
       const html = wordTimings.map((w, idx) =>
         `<span class="karaoke-word"
                 data-idx="${idx}"
                 data-start="${w.start}"
                 data-end="${w.end}">
-           ${escapeHtml(w.word)}
+           ${w.word}
          </span>`
       ).join(' ');
       transcriptPre.innerHTML = html;
@@ -800,7 +769,7 @@
                 id="seg-${jobId}-${i}"
                 data-start="${seg.start}">
              <strong>[${seg.start.toFixed(2)} → ${seg.end.toFixed(2)}]</strong>
-             ${escapeHtml(seg.text.join(" "))}
+             ${seg.text.join(" ")}
            </div>`
         ).join('')
       : `<div style="color:#6c757d;">No word-level segments available.</div>`;
@@ -813,20 +782,17 @@
 
     if (audio && wordTimings.length > 0) {
       // Protect against duplicated listeners: remove existing before adding
-      if (audio._karaokeHandler) {
-        audio.removeEventListener('timeupdate', audio._karaokeHandler);
-      }
+      audio.removeEventListener('timeupdate', audio._karaokeHandler);
       audio._karaokeHandler = () => syncKaraoke(jobId, audio.currentTime);
       audio.addEventListener('timeupdate', audio._karaokeHandler);
 
-      // attach click handlers (ensure single attach)
       transcriptPre.addEventListener('click', (e) => {
         const span = e.target.closest('.karaoke-word');
         if (!span) return;
         const t = parseFloat(span.dataset.start || '0');
         audio.currentTime = t;
-        // attempt to play in case the audio is paused
-        audio.play().catch(()=>{});
+        // ensure it plays when user clicks
+        try { audio.play().catch(()=>{}); } catch {}
       });
 
       segmentsDiv.addEventListener('click', (e) => {
@@ -834,19 +800,9 @@
         if (!line) return;
         const t = parseFloat(line.dataset.start || '0');
         audio.currentTime = t;
-        audio.play().catch(()=>{});
+        try { audio.play().catch(()=>{}); } catch {}
       });
     }
-  }
-
-  // small helper to avoid XSS when inserting transcript words
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
   }
 
   // Karaoke sync helper
